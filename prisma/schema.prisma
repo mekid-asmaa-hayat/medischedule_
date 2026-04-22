@@ -1,0 +1,201 @@
+// prisma/schema.prisma
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  STAFF
+  PATIENT
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(PATIENT)
+  image     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+  notifications  Notification[]
+
+  @@map("users")
+}
+
+model PatientProfile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  dateOfBirth      DateTime?
+  gender           String?
+  bloodType        String?
+  allergies        String?
+  medicalHistory   String?
+  address          String?
+  emergencyContact String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@map("patient_profiles")
+}
+
+model DoctorProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  specialtyId         String
+  licenseNumber       String   @unique
+  bio                 String?
+  experience          Int? // years
+  consultationFee     Decimal? @db.Decimal(10, 2)
+  rating              Float?   @default(0)
+  isAcceptingPatients Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialty    Specialty          @relation(fields: [specialtyId], references: [id])
+  availability Availability[]
+  timeOff      TimeOff[]
+  appointments Appointment[]
+  notes        ConsultationNote[]
+
+  @@map("doctor_profiles")
+}
+
+model Specialty {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  doctors      DoctorProfile[]
+  appointments Appointment[]
+
+  @@map("specialties")
+}
+
+model Availability {
+  id           String    @id @default(cuid())
+  doctorId     String
+  dayOfWeek    DayOfWeek
+  startTime    String // "HH:MM" 24hr format
+  endTime      String // "HH:MM" 24hr format
+  slotDuration Int       @default(30) // minutes per slot
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  doctor DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, dayOfWeek])
+  @@map("availabilities")
+}
+
+model TimeOff {
+  id        String   @id @default(cuid())
+  doctorId  String
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("time_offs")
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  patientId   String
+  doctorId    String
+  specialtyId String
+  date        DateTime          @db.Date
+  startTime   String // "HH:MM"
+  endTime     String // "HH:MM"
+  status      AppointmentStatus @default(PENDING)
+  reason      String
+  notes       String?
+  createdById String? // staff or admin user id who created it
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient          PatientProfile   @relation(fields: [patientId], references: [id])
+  doctor           DoctorProfile    @relation(fields: [doctorId], references: [id])
+  specialty        Specialty        @relation(fields: [specialtyId], references: [id])
+  consultationNote ConsultationNote?
+
+  // Prevent double-booking: same doctor cannot have two appointments at the same time slot
+  @@unique([doctorId, date, startTime])
+  @@map("appointments")
+}
+
+model ConsultationNote {
+  id            String    @id @default(cuid())
+  appointmentId String    @unique
+  doctorId      String
+  subjective    String? // patient's chief complaint
+  objective     String? // examination findings
+  assessment    String? // diagnosis
+  plan          String? // treatment plan
+  prescription  String?
+  followUpDate  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  appointment Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctor      DoctorProfile @relation(fields: [doctorId], references: [id])
+
+  @@map("consultation_notes")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info") // info | success | warning | error
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
