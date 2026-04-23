@@ -15,6 +15,7 @@ import {
   Baby,
   Bone,
 } from "lucide-react";
+import HomePage from "./HomePage";
 
 const FEATURES = [
   {
