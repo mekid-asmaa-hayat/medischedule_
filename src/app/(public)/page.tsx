@@ -86,7 +86,7 @@ export default async function Page() {
               Your Health,<br />Our Priority
             </h1>
 
-            <p className="text-xl text-stone-900 leading-relaxed">
+            <p className="text-xl text-red-400 leading-relaxed">
               Book appointments with top-rated doctors, manage your health
               records, and get the care you deserve — all in one place.
             </p>
